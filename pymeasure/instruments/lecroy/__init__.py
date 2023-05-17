@@ -23,4 +23,4 @@
 #
 
 from .lecroyT3DSO1204 import LeCroyT3DSO1204
-from .lecroyLM10ZiA import LeCroyDSOXXXX
+from .lecroyLabMaster10ZiA import LabMaster10ZiA
