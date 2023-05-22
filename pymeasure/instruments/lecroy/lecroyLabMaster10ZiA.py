@@ -105,8 +105,6 @@ class ScopeChannel(Channel):
         values={0.1, 0.2, 0.5, 1, 2, 5, 10, 20, 50, 100, 200, 500, 1000, 2000, 5000, 10000},
     )
 
-    scale = Instrument.control("VDIV?", "VDIV %.2EV", """ A float parameter that specifies the vertical scale (units per division) in Volts.""")
-
     unit = Instrument.control(
         "UNIT?",
         "UNIT %s",
@@ -228,6 +226,64 @@ class ScopeChannel(Channel):
         values=_measurable_parameters,
     )
 
+    def get_measurement(self, type, position):
+        """finish"""  #! finish, create dictionary for measurements
+
+        if type == "mean":
+            typeIdx = 7
+        elif type == "pkpk":
+            typeIdx = 3
+        self.set_meas_param = (position, typeIdx)
+
+        self.set_meas_channel = (position, self.id - 1)
+        # turn on view
+        # self.write(f"VBS 'app.Measure.{position}.View=1'")
+
+        value = self.get_meas_value(position)
+        # turn off view
+        self.write(f"VBS 'app.Measure.{position}.View=0'")
+
+        return value
+
+    def get_meas_value(self, position):
+        """#! finish"""
+        return self.ask(f"VBS? 'return=app.Measure.{position}.Out.Result.Value'")
+
+    set_meas_param = Instrument.control(
+        "VBS? 'return=app.Measure.%s.ParamEngine=%d'",
+        "VBS 'app.Measure.%s.ParamEngine=%d",
+        """  .""",  #! finish
+    )
+
+    # set_meas_view = Instrument.control(
+    #     "VBS? 'return=app.Measure.%s.View=%d",
+    #     "VBS 'app.Measure.%s.View=%d'",
+    #     """  .""",  #! finish
+    # )
+
+    # meas_value = Instrument.control(
+    #     "VBS? 'return=app.Measure.%s.Out.Result.Value'",
+    #     "VBS 'app.Measure.%s.Out.Result.Value'",
+    #     """  .""",  #! finish
+    # )
+
+    set_meas_channel = Instrument.control(
+        "VBS? 'return=app.Measure.%s.Source1=ch'",
+        "VBS 'app.Measure.%s.Source1=%s'",
+        """  .""",  #! finish
+    )
+
+    def set_vertical_scale(self, yscale):
+        """finish"""  #! finish
+        yrange = (float(yscale) / 0.95) / 8
+        self.vertical_scale = yrange
+
+    vertical_scale = Instrument.control(
+        "VBS? 'return=app.Acquisition.ch.VerScale",
+        "VBS 'app.Acquisition.ch.VerScale=%f",
+        """  A float parameter that specifies the vertical scale (units per division) in Volts.""",  #! finish
+    )
+
     def measure_parameter(self, parameter: str):
         """Process a waveform with the selected algorithm and returns the specified measurement.
         :param parameter: same as the display_parameter property
@@ -242,10 +298,67 @@ class ScopeChannel(Channel):
         else:
             raise ValueError(f"Cannot extract value from output {output}")
 
+    def set_vertical_scale_variable(self, truefalse):
+        """finish"""  #! finish
+        self.write(f"VBS 'app.Acquisition.ch.VerScaleVariable={truefalse}'")
+
+    def set_vertical_offset(self, yscale):
+        """finish"""  #! finish
+        yrange = -float(yscale)
+        self.vertical_offset = yrange
+
+    vertical_offset = Instrument.control(
+        "VBS? 'return=app.Acquisition.ch.VerOffset=%f'",
+        "VBS 'app.Acquisition.ch.VerOffset=%f",
+        """  .""",  #! finish
+    )
+
+    def select_inputAB(self, input):
+        """#! finish."""
+
+        # ! maybe use self.sanitize_source
+        if self.id not in [2, 3]:
+            raise Exception("Channel must be either 2 or 3, not 1 or 4.")
+
+        if input.upper() in ["B", "INPUTB"]:
+            input = 1
+        elif input.upper() in ["A", "INPUTA"]:
+            input = 0
+        else:
+            raise Exception("Input A or B only")
+
+        self.input_select = input
+
+    input_select = Instrument.control(
+        "VBS? 'return=app.Acquisition.ch.ActiveInput'",
+        "VBS 'app.Acquisition.ch.ActiveInput=%d'",
+        """ #! TODO: finish """,
+        # validator=strict_discrete_set,
+        # values={0: "InputA", 1: "InputB"},
+        # map_values=True,
+    )
+
+    def toggle_trace(self, trace_status):
+        """Starts repetitive acquisitions.
+
+        This is the same as pressing the Run key on the front panel.
+        """
+        self.trace = trace_status
+
+    trace = Instrument.control(
+        "TRA?",
+        "TRA %s",
+        """ A string parameter that specifies whether a channel is on or off.
+        • The first input is the channel
+        • The first input is 'on' or 'off'
+        This property is set by a tuple.
+        """,
+    )
+
     def insert_id(self, command):
         # only in case of the BWL and PACU commands the syntax is different. Why? SIGLENT Why?
-        if command[0:4] == "BWL ":
-            return "BWL C%d,%s" % (self.id, command[4:])
+        if command[0:4] == "VBS ":
+            return command.replace(".ch.", ".C%d." % (self.id))
         elif command[0:5] == "PACU ":
             return "PACU %s,C%d" % (command[5:], self.id)
         else:
@@ -307,7 +420,6 @@ class ScopeChannel(Channel):
             "skew_factor": self.skew_factor,
             "display": self.display,
             "unit": self.unit,
-            "volts_div": self.scale,
             "inverted": self.invert,
             "trigger_coupling": self.trigger_coupling,
             "trigger_level": self.trigger_level,
@@ -385,6 +497,18 @@ class LabMaster10ZiA(Instrument):
             self._seconds_since_last_write = seconds_since_last_write
         super().write(command, **kwargs)
 
+    def set_timebase_scale(self, timebase):
+        """#! finish."""
+        numDivisions = 10
+        total_timebase = timebase / numDivisions
+        self.timebase_scale = total_timebase
+
+    def set_memory_depth(self, maxSamples, sampleRate):
+        """#! finish."""
+        timebase = maxSamples / sampleRate
+        self.memory_depth = maxSamples
+        self.set_timebase_scale(timebase)
+
     # def disconnect(self):
     #     if self.connected:
     #         self.connected = False
@@ -417,13 +541,70 @@ class LabMaster10ZiA(Instrument):
     )
 
     timebase_scale = Instrument.control(
-        "TDIV?",
-        "TDIV %.2ES",
-        """ A float parameter that sets the horizontal scale (units per division) in seconds (S),
-        for the main window.""",
-        validator=strict_range,
-        values=[1e-9, 100],
+        "VBS? 'return=app.Acquisition.Horizontal.HorScale'",
+        "VBS 'app.Acquisition.Horizontal.HorScale=%s'",
+        """  # finish  """,
+        validator=strict_discrete_set,
+        values={
+            25e-6: "25e-6",
+            20e-6: "20e-6",
+            10e-6: "10e-6",
+            5e-6: "5e-6",
+            2e-6: "2e-6",
+            1e-6: "1e-6",
+            500e-9: "500e-9",
+            200e-9: "200e-9",
+            100e-9: "100e-9",
+            50e-9: "50e-9",
+            20e-9: "20e-9",
+            10e-9: "10e-9",
+            5e-9: "5e-9",
+            2e-9: "2e-9",
+            1e-9: "1e-9",
+            500e-12: "500e-12",
+            200e-12: "200e-12",
+            100e-1: "100e-12",
+            50e-12: "50e-12",
+            20e-12: "20e-12",
+        },
     )
+
+    memory_depth = Instrument.control(
+        "VBS? 'return=app.Acquisition.Horizontal.MaxSamples'",
+        "VBS 'app.Acquisition.Horizontal.MaxSamples=%d'",
+        """ # finish .""",
+        validator=strict_discrete_set,
+        values={
+            40e6: "40e6",
+            32e6: "32e6",
+            16e6: "16e6",
+            8e6: "8e6",
+            3.2e6: "3.2e6",
+            1.6e6: "1.6e6",
+            800e3: "800ke3",
+            320e3: "320e3",
+            160e3: "160e3",
+            80e3: "80e3",
+            32e3: "32e3",
+            16e3: "16e3",
+            8e3: "8e3",
+            3.2e3: "3.2e3",
+            1.6e3: "1.6e3",
+            800: "800",
+            320: "320",
+            160: "160",
+            80: "80",
+            32: "32",
+        },
+    )
+    # timebase_scale = Instrument.control(
+    #     "TDIV?",
+    #     "TDIV %.2ES",
+    #     """ A float parameter that sets the horizontal scale (units per division) in seconds (S),
+    #     for the main window.""",
+    #     validator=strict_range,
+    #     values=[1e-9, 100],
+    # )
 
     timebase_hor_magnify = Instrument.control(
         "HMAG?",
@@ -482,12 +663,6 @@ class LabMaster10ZiA(Instrument):
     ###############
     # Acquisition #
     ###############
-    def toggle_trace(self, trace, trace_status):
-        """Starts repetitive acquisitions.
-
-        This is the same as pressing the Run key on the front panel.
-        """
-        self.trace = (trace, trace_status)
 
     def trig_setup(self, trigger_setup):
         """Starts repetitive acquisitions.
@@ -518,15 +693,6 @@ class LabMaster10ZiA(Instrument):
     #     :return: acquisition sample size of that channel."""
     #     return self.ask("MSIZ?")
 
-    trace = Instrument.control(
-        "%s:TRA?",
-        "%s:TRA %s",
-        """ A string parameter that specifies whether a channel is on or off.
-        • The first input is the channel
-        • The first input is 'on' or 'off'
-        This property is set by a tuple.
-        """,
-    )
     trigger_mode = Instrument.control(
         "TRMD?",
         "TRMD %s",
