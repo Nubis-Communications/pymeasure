@@ -52,6 +52,7 @@ if __name__ == "__main__":
     scope.ch_2.set_vertical_scale(640e-3)  #! 80*8 = 640mV -> max range
     scope.ch_3.set_vertical_scale(640e-3)  #! 80*8 = 640mV -> max range
 
+    time.sleep(5)
     type = "mean"
     C2_mean = scope.ch_2.get_measurement(type, "P1")
     C3_mean = scope.ch_3.get_measurement(type, "P2")

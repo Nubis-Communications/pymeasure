@@ -273,6 +273,7 @@ class CommonBase:
         :param query_delay: Delay between writing and reading in seconds.
         :returns: String returned by the device without read_termination.
         """
+        print(command)
         self.write(command)
         self.wait_for(query_delay)
         return self.read()

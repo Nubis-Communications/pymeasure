@@ -22,14 +22,5 @@
 # THE SOFTWARE.
 #
 
-from .keithley2000 import Keithley2000
-from .keithley2230G import Keithley2230G
-from .keithley2260B import Keithley2260B
-from .keithley2306 import Keithley2306
-from .keithley2400 import Keithley2400
-from .keithley2450 import Keithley2450
-from .keithley2600 import Keithley2600
-from .keithley2700 import Keithley2700
-from .keithley2750 import Keithley2750
-from .keithley6221 import Keithley6221
-from .keithley6517b import Keithley6517B
+from .adapters import AgiltronConsoleAdapter
+from .agiltronMEMS1xN import AgiltronMEMS1xN
