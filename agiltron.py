@@ -34,10 +34,9 @@ if __name__ == "__main__":
     # host = f"192.168.1.200"
     switch = AgiltronMEMS1xN()
 
-    switch.write("CARD -c 04 S01_1")
-    time.sleep(1)
-    switch.write("CARD -c 04 S01_6")
-    time.sleep(1)
+    switch.switch_channel(4)
+    switch.switch_channel(5)
+    switch.switch_channel(6)
 
     # success_ = switch.read()
     # print(success_)

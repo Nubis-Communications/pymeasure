@@ -48,3 +48,7 @@ class AgiltronMEMS1xN(Instrument):
     def write(self, command):
         self.adapter.write(command)
         time.sleep(self.query_delay)
+
+    def switch_channel(self, channel):
+        self.write(f"CARD -c 04 S01_{channel}")
+        self.sleep(self.query_delay)
