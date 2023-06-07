@@ -27,7 +27,6 @@ log.addHandler(logging.NullHandler())
 
 
 if __name__ == "__main__":
-
     rm = pyvisa.ResourceManager()
     resource_list = rm.list_resources()
     # ip = resource_list[0]
@@ -46,7 +45,8 @@ if __name__ == "__main__":
     scope.ch_3.select_inputAB("B")
 
     sampleRate = 160e9
-    maxSamples = 8e6
+    # maxSamples = 8e6
+    maxSamples = 32e3
     scope.set_memory_depth(maxSamples, sampleRate)
 
     scope.ch_2.set_vertical_scale(640e-3)  #! 80*8 = 640mV -> max range
@@ -63,6 +63,7 @@ if __name__ == "__main__":
 
     scope.ch_2.set_vertical_scale_variable(True)
     scope.ch_3.set_vertical_scale_variable(True)
+
 
     scope.ch_2.set_vertical_offset(C2_mean)
     scope.ch_3.set_vertical_offset(C3_mean)
