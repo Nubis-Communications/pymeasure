@@ -21,6 +21,7 @@ from pymeasure.instruments.lecroy.lecroyLabMaster10ZiA import LabMaster10ZiA
 import pyvisa
 import logging
 import time
+import numpy as np
 
 log = logging.getLogger("")
 log.addHandler(logging.NullHandler())
@@ -48,11 +49,15 @@ if __name__ == "__main__":
     # maxSamples = 8e6
     maxSamples = 32e3
     scope.set_memory_depth(maxSamples, sampleRate)
+    scope.trig_setup("single")
 
     scope.ch_2.set_vertical_scale(640e-3)  #! 80*8 = 640mV -> max range
     scope.ch_3.set_vertical_scale(640e-3)  #! 80*8 = 640mV -> max range
 
-    time.sleep(5)
+    # scope.trig_setup("single")
+    # data = scope.ask("VBS? 'return=app.Acquisition.C2.Out.Result.DataArray'")
+
+    # time.sleep(5)
     type = "mean"
     C2_mean = scope.ch_2.get_measurement(type, "P1")
     C3_mean = scope.ch_3.get_measurement(type, "P2")
@@ -64,9 +69,19 @@ if __name__ == "__main__":
     scope.ch_2.set_vertical_scale_variable(True)
     scope.ch_3.set_vertical_scale_variable(True)
 
-
     scope.ch_2.set_vertical_offset(C2_mean)
     scope.ch_3.set_vertical_offset(C3_mean)
 
     scope.ch_2.set_vertical_scale(C2_vpp)
     scope.ch_3.set_vertical_scale(C3_vpp)
+
+    ascii_data = scope.ask("C2:INSPECT? SIMPLE")
+    ascii_data_trimmed = (ascii_data.replace("\r", "").replace("\n", "").replace('"', "").replace("'", "")).split()
+    data_as = [float(x) for x in ascii_data_trimmed]
+    ...
+    data = scope.binary_values("C2:WF?", header_bytes=0, dtype=np.int8)
+    number_samples = int(scope.ask("VBS? 'return=app.acquisition.C2.Out.Result.Samples"))
+    offset = len(data) - number_samples
+    dataa = data[offset - 1 :]
+# start -> 361 len(vect) - vbs:samples
+#

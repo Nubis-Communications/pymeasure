@@ -7,12 +7,11 @@
 
 
 from pymeasure.instruments import Instrument, Channel
-from pymeasure.instruments.validators import strict_discrete_set, strict_range, strict_discrete_range
+from pymeasure.instruments.validators import strict_discrete_set, strict_range
 import time
 import re
 import sys
 import numpy as np
-
 
 # ------------------------------------------------------------------------------------
 
@@ -59,7 +58,14 @@ class ScopeChannel(Channel):
 
     _BOOLS = {True: "ON", False: "OFF"}
 
-    bwlimit = Instrument.control("BWL?", "BWL %s", """ Toggles the 20 MHz internal low-pass filter. (strict bool)""", validator=strict_discrete_set, values=_BOOLS, map_values=True)
+    bwlimit = Instrument.control(
+        "BWL?",
+        "BWL %s",
+        """ Toggles the 20 MHz internal low-pass filter. (strict bool)""",
+        validator=strict_discrete_set,
+        values=_BOOLS,
+        map_values=True,
+    )
 
     coupling = Instrument.control(
         "CPL?",
@@ -70,9 +76,16 @@ class ScopeChannel(Channel):
         map_values=True,
     )
 
-    display = Instrument.control("TRA?", "TRA %s", """Control the display enabled state. (strict bool)""", validator=strict_discrete_set, values=_BOOLS, map_values=True)
+    display = Instrument.control(
+        "TRA?",
+        "TRA %s",
+        """Control the display enabled state. (strict bool)""",
+        validator=strict_discrete_set,
+        values=_BOOLS,
+        map_values=True,
+    )
 
-    invert = Instrument.control("INVS?", "INVS %s", """ Toggles the inversion of the input signal. (strict bool)""", validator=strict_discrete_set, values=_BOOLS, map_values=True)
+    # invert = Instrument.control("INVS?", "INVS %s", """ Toggles the inversion of the input signal. (strict bool)""", validator=strict_discrete_set, values=_BOOLS, map_values=True)
 
     offset = Instrument.control(
         "OFST?",
@@ -84,17 +97,17 @@ class ScopeChannel(Channel):
         """,
     )
 
-    skew_factor = Instrument.control(
-        "SKEW?",
-        "SKEW %.2ES",
-        """ Channel-to-channel skew factor for the specified channel. Each analog channel can be
-        adjusted + or -100 ns for a total of 200 ns difference between channels. You can use
-        the oscilloscope's skew control to remove cable-delay errors between channels.
-        """,
-        validator=strict_range,
-        values=[-1e-7, 1e-7],
-        preprocess_reply=lambda v: v.rstrip("S"),
-    )
+    # skew_factor = Instrument.control(
+    #     "SKEW?",
+    #     "SKEW %.2ES",
+    #     """ Channel-to-channel skew factor for the specified channel. Each analog channel can be
+    #     adjusted + or -100 ns for a total of 200 ns difference between channels. You can use
+    #     the oscilloscope's skew control to remove cable-delay errors between channels.
+    #     """,
+    #     validator=strict_range,
+    #     values=[-1e-7, 1e-7],
+    #     preprocess_reply=lambda v: v.rstrip("S"),
+    # )
 
     probe_attenuation = Instrument.control(
         "ATTN?",
@@ -143,16 +156,16 @@ class ScopeChannel(Channel):
         """,
     )
 
-    trigger_level2 = Instrument.control(
-        "TRLV2?",
-        "TRLV2 %.2EV",
-        """ A float parameter that sets the lower trigger level voltage for the specified source.
-        Higher and lower trigger levels are used with runt/slope triggers.
-        When setting the trigger level it must be divided by the probe attenuation. This is
-        not documented in the datasheet and it is probably a bug of the scope firmware.
-        An out-of-range value will be adjusted to the closest legal value.
-        """,
-    )
+    # trigger_level2 = Instrument.control(
+    #     "TRLV2?",
+    #     "TRLV2 %.2EV",
+    #     """ A float parameter that sets the lower trigger level voltage for the specified source.
+    #     Higher and lower trigger levels are used with runt/slope triggers.
+    #     When setting the trigger level it must be divided by the probe attenuation. This is
+    #     not documented in the datasheet and it is probably a bug of the scope firmware.
+    #     An out-of-range value will be adjusted to the closest legal value.
+    #     """,
+    # )
 
     trigger_slope = Instrument.control(
         "TRSL?",
@@ -227,21 +240,33 @@ class ScopeChannel(Channel):
     )
 
     def get_measurement(self, type, position):
-        """finish"""  #! finish, create dictionary for measurements
+        """finish"""  #! finish, create dictionary for measurements"""
 
         if type == "mean":
             typeIdx = 7
         elif type == "pkpk":
             typeIdx = 3
         self.set_meas_param = (position, typeIdx)
+        opc = int(self.ask("*OPC?"))
+        while not opc:
+            int(self.ask("*OPC?"))
+        print(opc)
 
         self.set_meas_channel = (position, self.id - 1)
+        opc = int(self.ask("*OPC?"))
+        while not opc:
+            int(self.ask("*OPC?"))
+        print(opc)
         # turn on view
         # self.write(f"VBS 'app.Measure.{position}.View=1'")
 
         value = self.get_meas_value(position)
         # turn off view
         self.write(f"VBS 'app.Measure.{position}.View=0'")
+
+        opc = int(self.ask("*OPC?"))
+        while not opc:
+            int(self.ask("*OPC?"))
 
         return value
 
@@ -328,6 +353,10 @@ class ScopeChannel(Channel):
             raise Exception("Input A or B only")
 
         self.input_select = input
+        opc = int(self.ask("*OPC?"))
+        while not opc:
+            int(self.ask("*OPC?"))
+        print(opc)
 
     input_select = Instrument.control(
         "VBS? 'return=app.Acquisition.ch.ActiveInput'",
@@ -452,7 +481,7 @@ class LabMaster10ZiA(Instrument):
     def __init__(self, adapter, name="LeCroy LabMaster 10 Zi-A Oscilloscope", **kwargs):
         super().__init__(adapter, name, **kwargs)
         if self.adapter.connection is not None:
-            self.adapter.connection.timeout = 3000
+            self.adapter.connection.timeout = 15000
 
         self._grid_number = 14  # Number of grids in the horizontal direction
         self._seconds_since_last_write = 0
@@ -470,8 +499,7 @@ class LabMaster10ZiA(Instrument):
     def default_setup(self):
         """Set up the oscilloscope for remote operation.
 
-        The COMM_HEADER command controls the way the oscilloscope formats response to queries. This command does not affect the interpretation of messages sent to the oscilloscope. Headers can be sent in their long or
-        short form regardless of the CHDR setting.
+        The COMM_HEADER command controls the way the oscilloscope formats response to queries. This command does not affect the interpretation of messages sent to the oscilloscope. Headers can be sent in their long or short form regardless of the CHDR setting.
         By setting the COMM_HEADER to OFF, the instrument is going to reply with minimal information, and this makes the response message much easier to parse.
         The user should not be fiddling with the COMM_HEADER during operation, because if the communication header is anything other than OFF, the whole driver breaks down.
         """
@@ -497,6 +525,40 @@ class LabMaster10ZiA(Instrument):
             self._seconds_since_last_write = seconds_since_last_write
         super().write(command, **kwargs)
 
+    # def values(self, command, **kwargs):
+    #     """Reads a set of values from the instrument through the adapter,
+    #     passing on any key-word arguments.
+    #     """
+    #     return self.instrument.values(":channel%d:%s" % (self.number, command), **kwargs)
+
+    # def values(self, command, separator=",", cast=float, preprocess_reply=None):
+    #     """Write a command to the instrument and return a list of formatted
+    #     values from the result.
+
+    #     :param command: SCPI command to be sent to the instrument
+    #     :param separator: A separator character to split the string into a list
+    #     :param cast: A type to cast the result
+    #     :param preprocess_reply: optional callable used to preprocess values
+    #         received from the instrument. The callable returns the processed
+    #         string.
+    #     :returns: A list of the desired type, or strings where the casting fails
+    #     """
+    #     results = str(self.ask(command)).strip()
+    #     if callable(preprocess_reply):
+    #         results = preprocess_reply(results)
+    #     results = results.split(separator)
+    #     for i, result in enumerate(results):
+    #         try:
+    #             if cast == bool:
+    #                 # Need to cast to float first since results are usually
+    #                 # strings and bool of a non-empty string is always True
+    #                 results[i] = bool(float(result))
+    #             else:
+    #                 results[i] = cast(result)
+    #         except Exception:
+    #             pass  # Keep as string
+    #     return results
+
     def set_timebase_scale(self, timebase):
         """#! finish."""
         numDivisions = 10
@@ -508,6 +570,10 @@ class LabMaster10ZiA(Instrument):
         timebase = maxSamples / sampleRate
         self.memory_depth = maxSamples
         self.set_timebase_scale(timebase)
+        opc = int(self.ask("*OPC?"))
+        while not opc:
+            int(self.ask("*OPC?"))
+        print(opc)
 
     # def disconnect(self):
     #     if self.connected:
@@ -520,8 +586,7 @@ class LabMaster10ZiA(Instrument):
         "CHDR?",
         "CHDR %s",
         """ Controls the way the oscilloscope formats response to queries.
-        The user should not be fiddling with the COMM_HEADER during operation, because
-        if the communication header is anything other than OFF, the whole driver breaks down.
+        The user should not be fiddling with the COMM_HEADER during operation, because if the communication header is anything other than OFF, the whole driver breaks down.
         • SHORT — response starts with the short form of the header word.
         • LONG — response starts with the long form of the header word.
         • OFF — header is omitted from the response and units in numbers are suppressed.""",
@@ -687,7 +752,8 @@ class LabMaster10ZiA(Instrument):
     #     self.write(f"MSIZ {size}")
 
     # def get_acquisition_length(self):
-    #     """Get acquisition sample size for a certain channel. Used mainly for waveform acquisition.
+    #     """Get acquisition sample size for a certain channel.
+    #  Used mainly for waveform acquisition.
 
     #     :param source: channel number of channel name.
     #     :return: acquisition sample size of that channel."""
@@ -765,7 +831,16 @@ class LabMaster10ZiA(Instrument):
         <size>:={14K,140K,1.4M,14M} for interleave mode. Interleave mode means multiple active
         channels per A/D converter. """,
         validator=strict_discrete_set,
-        values={7e3: "7K", 7e4: "70K", 7e5: "700K", 7e6: "7M", 14e3: "14K", 14e4: "140K", 14e5: "1.4M", 14e6: "14M"},
+        values={
+            7e3: "7K",
+            7e4: "70K",
+            7e5: "700K",
+            7e6: "7M",
+            14e3: "14K",
+            14e4: "140K",
+            14e5: "1.4M",
+            14e6: "14M",
+        },
         map_values=True,
     )
 
