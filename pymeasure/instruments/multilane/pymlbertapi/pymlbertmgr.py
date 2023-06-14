@@ -717,7 +717,7 @@ class mlbertmgr(object):
 
         """ADVANCED AMPLITUDE MODE"""
         # ADVANCED AMPLITUDE CONTROL
-        APROXAMPLITUDE = ctypes.pointer(ctypes.c_int(0))
+        APPROXAMPLITUDE = ctypes.pointer(ctypes.c_int(0))
         ADVANCEDAMPLITUDE = AdvancedAmplitude()
         # if tapsmode == 3:
         ADVANCEDAMPLITUDE.preEmphasis = ctypes.c_int(ffetaps[len(ffetaps) // 2 - 1])
@@ -742,10 +742,10 @@ class mlbertmgr(object):
         APPLYCONFIG = True  # Trigger the configuration of all the applied settings
 
         for channel in range(channels):
-            SUCCESS = self.mlbertmgr_setAdvancedAmplitude(channel, ADVANCEDAMPLITUDE, APROXAMPLITUDE, APPLYCONFIG)
+            SUCCESS = self.mlbertmgr_setAdvancedAmplitude(channel, ADVANCEDAMPLITUDE, APPROXAMPLITUDE, APPLYCONFIG)
             if SUCCESS != BERTMGR_STATUS.BERTMGR_SUCCESS:
                 raise Exception("Failed to set Advanced Amplitude! : ", SUCCESS)
-            logging.info("APROX AMPLITUDE = ", APROXAMPLITUDE[0])
+            logging.info(f"APPROX AMPLITUDE = {APPROXAMPLITUDE[0]}")
 
     def configure_fec(
         self,
@@ -876,7 +876,7 @@ class mlbertmgr(object):
                     raise Exception("Failed to Read single Monitor! : ", SUCCESS)
                 RETRY -= 1
             if VALUE[channel] == 1:
-                logging.info("Rx ", channel, " is locked!")
+                logging.info(f"Rx {channel} is locked!")
             else:
                 # Disable Monitor Flags
                 MONITORFLAGS = 0
@@ -895,27 +895,44 @@ class mlbertmgr(object):
             if SUCCESS != BERTMGR_STATUS.BERTMGR_SUCCESS:
                 raise Exception("Failed to Get Available Data!", SUCCESS)
             # print Out BER Data. Check MeasurementsData struct for more details
-            logging.info("Datacount: ", DATACOUNT[0])
+            logging.info(f"Datacount: {DATACOUNT[0]}")
             logging.info("Measured BER Data : \r")
-            logging.info("Is BER Enabled : ", MEASBERDATA[DATACOUNT[0] - 1].berData.enabled)
+            berenabled = MEASBERDATA[DATACOUNT[0] - 1].berData.enabled
+            logging.info(f"Is BER Enabled : {berenabled}")
             for channel in range(channels):
-                logging.info("channel ", channel)
-                logging.info("Enabled Channels : ", MEASBERDATA[DATACOUNT[0] - 1].berData.enabledChannels[channel])
-                logging.info("Locked Channels : ", MEASBERDATA[DATACOUNT[0] - 1].berData.lockedChannels[channel])
-                logging.info("BER Capture Time : ", MEASBERDATA[DATACOUNT[0] - 1].berData.Time[channel])
-                logging.info("Bit Count : ", MEASBERDATA[DATACOUNT[0] - 1].berData.BitCount[channel])
-                logging.info("ErrorCount_MSB: ", MEASBERDATA[DATACOUNT[0] - 1].berData.ErrorCount_MSB[channel])
-                logging.info("ErrorCount_LSB: ", MEASBERDATA[DATACOUNT[0] - 1].berData.ErrorCount_LSB[channel])
-                logging.info("ErrorCount : ", MEASBERDATA[DATACOUNT[0] - 1].berData.ErrorCount[channel])
-                logging.info("AccumulatedErrorCount_MSB: ", MEASBERDATA[DATACOUNT[0] - 1].berData.AccumulatedErrorCount_MSB[channel])
-                logging.info("BER_MSB_Interval: ", MEASBERDATA[DATACOUNT[0] - 1].berData.BER_MSB_Interval[channel])
-                logging.info("BER_MSB_Realtime: ", MEASBERDATA[DATACOUNT[0] - 1].berData.BER_MSB_Realtime[channel])
-                logging.info("AccumulatedErrorCount_LSB: ", MEASBERDATA[DATACOUNT[0] - 1].berData.AccumulatedErrorCount_LSB[channel])
-                logging.info("BER_LSB_Interval: ", MEASBERDATA[DATACOUNT[0] - 1].berData.BER_LSB_Interval[channel])
-                logging.info("BER_LSB_Realtime: ", MEASBERDATA[DATACOUNT[0] - 1].berData.AccumulatedErrorCount_LSB[channel])
-                logging.info("AccumulatedErrorCount : ", MEASBERDATA[DATACOUNT[0] - 1].berData.AccumulatedErrorCount[channel])
-                logging.info("BER_Interval: ", MEASBERDATA[DATACOUNT[0] - 1].berData.BER_Interval[channel])
-                logging.info("BER Realtime : ", MEASBERDATA[DATACOUNT[0] - 1].berData.BER_Realtime[channel])
+                logging.info(f"channel {channel}")
+                enabled_channels = MEASBERDATA[DATACOUNT[0] - 1].berData.enabledChannels[channel]
+                locked_channels = MEASBERDATA[DATACOUNT[0] - 1].berData.lockedChannels[channel]
+                bertime = MEASBERDATA[DATACOUNT[0] - 1].berData.Time[channel]
+                bitcount = MEASBERDATA[DATACOUNT[0] - 1].berData.BitCount[channel]
+                errorcount_msb = MEASBERDATA[DATACOUNT[0] - 1].berData.ErrorCount_MSB[channel]
+                errorcount_lsb = MEASBERDATA[DATACOUNT[0] - 1].berData.ErrorCount_LSB[channel]
+                error_count = MEASBERDATA[DATACOUNT[0] - 1].berData.ErrorCount[channel]
+                ber_msb_interval = MEASBERDATA[DATACOUNT[0] - 1].berData.BER_MSB_Interval[channel]
+                ber_lsb_interval = MEASBERDATA[DATACOUNT[0] - 1].berData.BER_LSB_Interval[channel]
+                ber_msb_realtime = MEASBERDATA[DATACOUNT[0] - 1].berData.BER_MSB_Realtime[channel]
+                ber_lsb_realtime = MEASBERDATA[DATACOUNT[0] - 1].berData.BER_LSB_Interval[channel]
+                ber_interval = MEASBERDATA[DATACOUNT[0] - 1].berData.BER_Interval[channel]
+                ber_realtime = MEASBERDATA[DATACOUNT[0] - 1].berData.BER_Realtime[channel]
+                accumulatederrorcount_msb = MEASBERDATA[DATACOUNT[0] - 1].berData.AccumulatedErrorCount_MSB[channel]
+                accumulatederrorcount_lsb = MEASBERDATA[DATACOUNT[0] - 1].berData.AccumulatedErrorCount_LSB[channel]
+                accumulatederrorcount = MEASBERDATA[DATACOUNT[0] - 1].berData.AccumulatedErrorCount[channel]
+                logging.info(f"Enabled Channels: {enabled_channels}")
+                logging.info(f"Locked Channels: {locked_channels}")
+                logging.info(f"BER Capture Time: {bertime}")
+                logging.info(f"Bit Count: {bitcount}")
+                logging.info(f"ErrorCount_MSB: {errorcount_msb}")
+                logging.info(f"ErrorCount_LSB: {errorcount_lsb}")
+                logging.info(f"ErrorCount: {error_count}")
+                logging.info(f"BER_MSB_Interval: {ber_msb_interval}")
+                logging.info(f"BER_MSB_Realtime: {ber_msb_realtime}")
+                logging.info(f"BER_LSB_Interval: {ber_lsb_interval}")
+                logging.info(f"BER_LSB_Realtime: {ber_lsb_realtime}")
+                logging.info(f"BER_Interval: {ber_interval}")
+                logging.info(f"BER Realtime: {ber_realtime}")
+                logging.info(f"AccumulatedErrorCount_MSB: {accumulatederrorcount_msb}")
+                logging.info(f"AccumulatedErrorCount_LSB: {accumulatederrorcount_lsb}")
+                logging.info(f"AccumulatedErrorCount: {accumulatederrorcount}")
             # Stop BER
             SUCCESS = self.mlbertmgr_stopBER()
             if SUCCESS != BERTMGR_STATUS.BERTMGR_SUCCESS:
