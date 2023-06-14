@@ -5,6 +5,8 @@ import os  # os.path
 import ctypes  # DLL types marshalling
 from enum import IntEnum
 import logging
+import numpy as np
+import time
 
 # flake8: noqa
 
@@ -599,11 +601,25 @@ class mlbertmgr(object):
         else:
             logging.info("No CDR divider selected")
 
-    def configure_txrx(self, modulation="pam4", baudrate=56, prbs="PRBS31", amplitude=200, invert="off"):
+    def configure_modulation(
+        self,
+        channels=8,
+        modulation="pam4",
+        graycoding=True,
+        baudrate=56,
+        prbs="PRBS31",
+        amplitude=200,
+        invert="off",
+        tapsmode=7,
+        ffetaps=None,
+        eyelevels=[1000, 2000],
+        scalinglevel=100,
+    ):
         TXPATTERN = PatternConfig()
         RXPATTERN = PatternConfig()
-        APPLYCONFIG = True
+        APPLYCONFIG = False
 
+        """CONFIGURE LINE RATE AND CODING"""
         # MODULATION CONTROL
         if modulation.lower() == "pam4":
             EYEMODE = BERTMGR_SIGMODULATION.BERTMGR_PAM4
@@ -614,33 +630,48 @@ class mlbertmgr(object):
         else:
             raise Exception("Modulation must be 'PAM4' or 'NRZ'")
 
+        # GRAY CODING CONTROL
+        if graycoding == True:
+            SUCCESS = self.mlbertmgr_setGrayCoding(graycoding, APPLYCONFIG)
+            if SUCCESS != BERTMGR_STATUS.BERTMGR_SUCCESS:
+                logging.warning("Gray coding must be True or False")
+                raise Exception("Failed to set Gray Coding! : ", SUCCESS)
+            logging.info(f"Gray coding set to {graycoding}")
+
+        # TAP CONTROL
+        self.supported_taps = dir(BERTMGR_TAPSMODE)
+        self.taps_string = [t for t in self.supported_taps if str(tapsmode) in t]
+        TAPSMODE = eval("BERTMGR_TAPSMODE." + f"{self.taps_string[0]}")
+        logging.info(f"Tap mode selected: {self.taps_string[0]}")
+
+        SUCCESS = self.mlbertmgr_setTapsMode(TAPSMODE, APPLYCONFIG)
+        if SUCCESS != BERTMGR_STATUS.BERTMGR_SUCCESS:
+            logging.warning("Tap mode not set successfully")
+            raise Exception("Failed to set Taps Mode! : ", SUCCESS)
+        logging.info("Tap mode set successfully")
+
         # LINE RATE CONTROL
         if baudrate <= 112:
             SUCCESS = self.mlbertmgr_setLinerate(baudrate, APPLYCONFIG)
             if SUCCESS != BERTMGR_STATUS.BERTMGR_SUCCESS:
-                raise Exception("Failed to set Line rate! : ", SUCCESS)
+                logging.warning("Baud rate not set successfully")
+                raise Exception("Failed to set baud rate! : ", SUCCESS)
             logging.info(f"Baud rate selected: {baudrate}G")
         else:
             raise Exception("Baud rate must be less than 112G")
 
+        """CONFIGURE PATTERN"""
         # PATTERN CONTROL
         self.supported_patterns = dir(BERTMGR_PATTERNTYPE)
-        prbs_string = [p for p in self.supported_patterns if prbs.upper() in p]
-        if prbs_string == []:
+        self.prbs_string = [p for p in self.supported_patterns if prbs.upper() in p]
+        if self.prbs_string == []:
             logging.warning(f"PRBS pattern '{prbs}' not supported, refer to manual")
-        elif len(prbs_string) == 1:
-            TXPATTERN.pattern = eval("BERTMGR_PATTERNTYPE." + f"{prbs_string[0]}")
-            logging.info(f"PRBS pattern selected: {prbs}G")
+        elif len(self.prbs_string) == 1:
+            TXPATTERN.pattern = eval("BERTMGR_PATTERNTYPE." + f"{self.prbs_string[0]}")
+            RXPATTERN.pattern = eval("BERTMGR_PATTERNTYPE." + f"{self.prbs_string[0]}")
+            logging.info(f"Tx and Rx PRBS pattern selected: {self.prbs_string[0]}")
         else:
-            logging.warning(f"PRBS pattern selected is ambiguous, be more specific")
-
-        # AMPLITUDE CONTROL
-        channel = 1
-        amplitude = 175
-        SUCCESS = self.mlbertmgr_setAmplitude(channel, amplitude, APPLYCONFIG)
-        if SUCCESS != BERTMGR_STATUS.BERTMGR_SUCCESS:
-            raise Exception("Failed to set Amplitude Level! : ", SUCCESS)
-        print("Amplitude Level is set !")
+            logging.warning(f"PRBS pattern selected is not recognised, check datasheet")
 
         # INVERT CONTROL
         self.invert_list = ["off", "tx", "rx", "txrx"]
@@ -651,6 +682,245 @@ class mlbertmgr(object):
             TXPATTERN.invert = bool(int(self.invert_vals[1]))
             RXPATTERN.invert = bool(int(self.invert_vals[0]))
             logging.info(f"Invert settings, tx: {TXPATTERN.invert}, rx: {RXPATTERN.invert}")
+
+        """SET AMPLITUDE"""
+        # AMPLITUDE CONTROL
+        if not isinstance(amplitude, (list, np.ndarray)):
+            logging.info(f"Converting amplitude {amplitude} to array {[amplitude]}")
+            amplitude = [amplitude] * channels
+        else:
+            if not len(amplitude) == channels:
+                logging.warning("Number of amplitude values must be either one value (for all channels), or equal to the number of channels.")
+                logging.warning("Using first amplitude value.")
+                amplitude = [amplitude[0]] * channels
+
+        for channel in range(channels):
+            SUCCESS = self.mlbertmgr_setTxPattern(channel, TXPATTERN, APPLYCONFIG)
+            if SUCCESS != BERTMGR_STATUS.BERTMGR_SUCCESS:
+                raise Exception("Failed to set Tx Pattern! : ", SUCCESS)
+            logging.info(f"Tx pattern implemented successfully")
+
+            SUCCESS = self.mlbertmgr_setRxPattern(channel, RXPATTERN, APPLYCONFIG)
+            if SUCCESS != BERTMGR_STATUS.BERTMGR_SUCCESS:
+                raise Exception("Failed to set Rx Pattern! : ", SUCCESS)
+            logging.info(f"Rx pattern implemented successfully")
+
+            if amplitude[channel] > 250:
+                amplitude[channel] = 250
+                logging.warning(f"Amplitude {amplitude} > 250 mV, setting to 250 mV (maximum)")
+
+            if tapsmode != 7:
+                SUCCESS = self.mlbertmgr_setAmplitude(channel, amplitude[channel], APPLYCONFIG)
+                if SUCCESS != BERTMGR_STATUS.BERTMGR_SUCCESS:
+                    raise Exception("Failed to set Amplitude Level! : ", SUCCESS)
+                logging.info(f"Amplitude on ch{channel} selected as {amplitude[channel]}")
+
+        """ADVANCED AMPLITUDE MODE"""
+        # ADVANCED AMPLITUDE CONTROL
+        APROXAMPLITUDE = ctypes.pointer(ctypes.c_int(0))
+        ADVANCEDAMPLITUDE = AdvancedAmplitude()
+        # if tapsmode == 3:
+        ADVANCEDAMPLITUDE.preEmphasis = ctypes.c_int(ffetaps[len(ffetaps) // 2 - 1])
+        ADVANCEDAMPLITUDE.mainTap = ctypes.c_int(ffetaps[len(ffetaps) // 2])
+        ADVANCEDAMPLITUDE.postEmphasis = ctypes.c_int(ffetaps[len(ffetaps) // 2 + 1])
+        logging.info(f"Setting tap values to {ffetaps}")
+        logging.info(f"Setting tap values to {ffetaps}")
+        if tapsmode == 7:
+            for i in range(tapsmode):
+                ADVANCEDAMPLITUDE.advancedTaps[i] = ctypes.c_int(ffetaps[i])
+            logging.info(f"Setting tap values to {ffetaps}")
+
+        # EYE LEVEL CONTROL
+        ADVANCEDAMPLITUDE.innerLevel = ctypes.c_int(eyelevels[0])
+        ADVANCEDAMPLITUDE.outerLevel = ctypes.c_int(eyelevels[1])
+        logging.info(f"Setting inner and outer eye levels to {eyelevels}, respectively")
+
+        # SCALING CONTROL
+        ADVANCEDAMPLITUDE.scalingLevel = ctypes.c_int(scalinglevel)
+        logging.info(f"Setting scaling level to {scalinglevel}, respectively")
+
+        APPLYCONFIG = True  # Trigger the configuration of all the applied settings
+
+        for channel in range(channels):
+            SUCCESS = self.mlbertmgr_setAdvancedAmplitude(channel, ADVANCEDAMPLITUDE, APROXAMPLITUDE, APPLYCONFIG)
+            if SUCCESS != BERTMGR_STATUS.BERTMGR_SUCCESS:
+                raise Exception("Failed to set Advanced Amplitude! : ", SUCCESS)
+            logging.info("APROX AMPLITUDE = ", APROXAMPLITUDE[0])
+
+    def configure_fec(
+        self,
+        channels=8,
+        modulation="PAM4",
+        baudrate="50",
+        fecmode="disabled",
+        fecpattern="disabled",
+    ):
+        if modulation.upper() == "PAM4":
+            bitrate = baudrate * 2
+        elif modulation.upper() == "NRZ":
+            bitrate = baudrate
+        else:
+            logging.warning(f"Uncompatible baud rate selected, using default 50G")
+
+        APPLYCONFIG = False  #
+
+        # FEC MODE CONTROL``
+        self.supported_fecs = dir(BERTMGR_FECMODE)
+        if fecmode != "disabled":
+            difference_array = np.absolute(np.array((25, 50, 100, 200, 400)) - bitrate)
+            # find the index of minimum element from the array
+            coerced_bitrate = bitrate - difference_array[difference_array.argmin()]
+            self.fecs_string = [t for t in self.supported_fecs if fecmode in t]
+            self.fecs_string = [t for t in self.fecs_string if str(coerced_bitrate) in t]
+        else:
+            fecmode = "FEC" + fecmode.upper()
+            self.fecs_string = [t for t in self.supported_fecs if fecmode in t]
+
+        FECMODE = eval("BERTMGR_FECMODE." + f"{self.fecs_string[0]}")
+        logging.info(f"FEC mode selected: {self.fecs_string[0]}")
+
+        # FEC PATTERN CONTROL
+        self.supported_fecpatterns = dir(BERTMGR_FECPATTERN)
+        self.fecpatterns_string = [p for p in self.supported_fecpatterns if fecpattern.upper() in p]
+        FECPATTERN = eval("BERTMGR_FECPATTERN." + f"{self.fecpatterns_string[0]}")
+        logging.info(f"FEC pattern selected: {self.fecpatterns_string[0]}")
+
+        # channels fec link
+        SKIPRESET = False
+        # Set FEC Mode. Check The table of features for compatibility
+        SUCCESS = self.mlbertmgr_setFECMode(FECMODE, FECPATTERN, APPLYCONFIG)
+        if SUCCESS != BERTMGR_STATUS.BERTMGR_SUCCESS:
+            logging.warning(f"FEC mode selected is not recognised, check datasheet")
+            raise Exception("Failed to set FEC Mode! : ", SUCCESS)
+        logging.info(f"FEC mode selected is {self.fecs_string[0]}")
+        logging.info(f"FEC PatternConfig selected is {self.fecpatterns_string[0]}")
+
+        APPLYCONFIG = True  #
+
+        # Set FEC Links. Check The table of features for compatibility
+        SUCCESS = self.mlbertmgr_configureFECLinks(channels, SKIPRESET, APPLYCONFIG)
+        if SUCCESS != BERTMGR_STATUS.BERTMGR_SUCCESS:
+            logging.warning(f"FEC not configured, see above and check datasheet")
+            raise Exception("Failed to set FEC links! : ", SUCCESS)
+        logging.info(f"FEC links up")
+        time.sleep(4)
+
+    def enable_txrx(
+        self,
+        channels=8,
+    ):
+        for channel in range(channels):
+            #   Edit parameters for your instance
+            ISENABLED = ctypes.pointer(ctypes.c_bool(False))
+            STATUS = True
+            # Enable Tx
+            SUCCESS = self.mlbertmgr_TxEnable(channel, STATUS)
+            if SUCCESS != BERTMGR_STATUS.BERTMGR_SUCCESS:
+                logging.warning(f"Failed to switch on channel {channel} tx")
+                raise Exception(f"Failed to enable channel {channel} tx! :", SUCCESS)
+            logging.info(f"Channel {channel} tx up")
+
+            # Enable Rx
+            SUCCESS = self.mlbertmgr_RxEnable(channel, STATUS)
+            if SUCCESS != BERTMGR_STATUS.BERTMGR_SUCCESS:
+                logging.warning(f"Failed to switch on channel {channel} rx")
+                raise Exception(f"Failed to enable channel {channel} rx! :", SUCCESS)
+            logging.info(f"Channel {channel} rx up")
+
+            # Get Tx Status
+            SUCCESS = self.mlbertmgr_getTxStatus(channel, ISENABLED)
+            if SUCCESS != BERTMGR_STATUS.BERTMGR_SUCCESS:
+                logging.warning(f"Channel {channel} tx status down")
+                raise Exception("Failed to Get Tx Status! : ", SUCCESS)
+            logging.info(f"Channel {channel} tx status up")
+            # Get Rx Status
+            SUCCESS = self.mlbertmgr_getRxStatus(channel, ISENABLED)
+            if SUCCESS != BERTMGR_STATUS.BERTMGR_SUCCESS:
+                logging.warning(f"Channel {channel} rx status down")
+                raise Exception("Failed to Get rx Status! : ", SUCCESS)
+            logging.info(f"Channel {channel} rx status up")
+
+    def basic_ber(self, channels=8, accumulate=False):
+
+        # Pre-allocate MEASBERDATA Struct
+        MEASBERDATA = (MeasurementsData * 1024)()
+        DATACOUNT = ctypes.pointer(ctypes.c_int(0))
+
+        # BER Enbaled CHANNELS. First Channel is Enabled
+        BERENABLEDCH = 0b00000001
+        VALUE = (ctypes.c_ushort * channels)(0)
+        # Before starting the BER accumulation, it is recommended to add a settling time of 2 seconds
+        # ML4054B requires 5 seconds after the configuration
+        # "pymlbertmgr.getConfigStatus()" will be implemented in a future library release to check the instrument configuration status and avoid adding a sleep time in the application script
+        time.sleep(3)  ## Ensure stabilization time after the BERT configuration
+        # Initialize Rx Lock Status and Monitor Rx Lock Sta
+        # tus
+        SUCCESS = BERTMGR_STATUS.BERTMGR_FAILED
+        # Call Rx lock Status in a while loop
+        RETRY = 20
+        # initialize Rx Lock Monitor Flag
+        SINGLEMONITORFLAG = BERTMGR_MONITOR_FLAGS.BERTMGR_MONITOR_RXLOCK
+        SUCCESS = self.mlbertmgr_enableMonitor(SINGLEMONITORFLAG)
+        if SUCCESS != BERTMGR_STATUS.BERTMGR_SUCCESS:
+            raise Exception("Failed to Enable Monitor! : ", SUCCESS)
+        logging.info("Monitor Flags are Enabled!")
+        # Wait for Monitor Data accumulation
+        time.sleep(0.35)
+        for channel in range(channels):
+            while VALUE[channel] == 0 and RETRY > 0:
+                time.sleep(0.1)  # Sleep for 100 ms
+                # Single Read Monitor of Rx Lock Status
+                SUCCESS = self.mlbertmgr_singleReadMonitor(SINGLEMONITORFLAG, VALUE)
+
+                if SUCCESS != BERTMGR_STATUS.BERTMGR_SUCCESS:
+                    raise Exception("Failed to Read single Monitor! : ", SUCCESS)
+                RETRY -= 1
+            if VALUE[channel] == 1:
+                logging.info("Rx ", channel, " is locked!")
+            else:
+                # Disable Monitor Flags
+                MONITORFLAGS = 0
+                SUCCESS = self.mlbertmgr_enableMonitor(MONITORFLAGS)
+                if SUCCESS != BERTMGR_STATUS.BERTMGR_SUCCESS:
+                    raise Exception("Failed to Disable Monitor! : ", SUCCESS)
+                logging.info("Monitor Flags are Disabled!")
+
+            # Start BER. This function requires Rx Lock.
+            self.mlbertmgr_startBER(BERENABLEDCH, accumulate)
+            # BER Counting Time
+            # ML4054 BER Accumulation starts 4 seconds after enabling the BER process.
+            time.sleep(5)
+            # Get Available Data
+            SUCCESS = self.mlbertmgr_getAvailableBERData(MEASBERDATA, DATACOUNT)
+            if SUCCESS != BERTMGR_STATUS.BERTMGR_SUCCESS:
+                raise Exception("Failed to Get Available Data!", SUCCESS)
+            # print Out BER Data. Check MeasurementsData struct for more details
+            logging.info("Datacount: ", DATACOUNT[0])
+            logging.info("Measured BER Data : \r")
+            logging.info("Is BER Enabled : ", MEASBERDATA[DATACOUNT[0] - 1].berData.enabled)
+            for channel in range(channels):
+                logging.info("channel ", channel)
+                logging.info("Enabled Channels : ", MEASBERDATA[DATACOUNT[0] - 1].berData.enabledChannels[channel])
+                logging.info("Locked Channels : ", MEASBERDATA[DATACOUNT[0] - 1].berData.lockedChannels[channel])
+                logging.info("BER Capture Time : ", MEASBERDATA[DATACOUNT[0] - 1].berData.Time[channel])
+                logging.info("Bit Count : ", MEASBERDATA[DATACOUNT[0] - 1].berData.BitCount[channel])
+                logging.info("ErrorCount_MSB: ", MEASBERDATA[DATACOUNT[0] - 1].berData.ErrorCount_MSB[channel])
+                logging.info("ErrorCount_LSB: ", MEASBERDATA[DATACOUNT[0] - 1].berData.ErrorCount_LSB[channel])
+                logging.info("ErrorCount : ", MEASBERDATA[DATACOUNT[0] - 1].berData.ErrorCount[channel])
+                logging.info("AccumulatedErrorCount_MSB: ", MEASBERDATA[DATACOUNT[0] - 1].berData.AccumulatedErrorCount_MSB[channel])
+                logging.info("BER_MSB_Interval: ", MEASBERDATA[DATACOUNT[0] - 1].berData.BER_MSB_Interval[channel])
+                logging.info("BER_MSB_Realtime: ", MEASBERDATA[DATACOUNT[0] - 1].berData.BER_MSB_Realtime[channel])
+                logging.info("AccumulatedErrorCount_LSB: ", MEASBERDATA[DATACOUNT[0] - 1].berData.AccumulatedErrorCount_LSB[channel])
+                logging.info("BER_LSB_Interval: ", MEASBERDATA[DATACOUNT[0] - 1].berData.BER_LSB_Interval[channel])
+                logging.info("BER_LSB_Realtime: ", MEASBERDATA[DATACOUNT[0] - 1].berData.AccumulatedErrorCount_LSB[channel])
+                logging.info("AccumulatedErrorCount : ", MEASBERDATA[DATACOUNT[0] - 1].berData.AccumulatedErrorCount[channel])
+                logging.info("BER_Interval: ", MEASBERDATA[DATACOUNT[0] - 1].berData.BER_Interval[channel])
+                logging.info("BER Realtime : ", MEASBERDATA[DATACOUNT[0] - 1].berData.BER_Realtime[channel])
+            # Stop BER
+            SUCCESS = self.mlbertmgr_stopBER()
+            if SUCCESS != BERTMGR_STATUS.BERTMGR_SUCCESS:
+                raise Exception("Failed to Stop BER Test!", SUCCESS)
+            logging.info("BER Test stopped!")
 
     def mlbertmgr_destroyInstance(self):
         self._api.mlbertmgr_destroyInstance(self.instance)
