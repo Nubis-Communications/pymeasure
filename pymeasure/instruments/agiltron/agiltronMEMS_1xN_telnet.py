@@ -16,7 +16,7 @@ import time
 class AgiltronMEMS1xN(Instrument):
     """#! finish"""
 
-    def __init__(self, host="192.168.1.200", port=23, uname="root", passwd="fs19681086", **kwargs):
+    def __init__(self, host="192.168.107.3", port=23, uname="root", passwd="fs19681086", **kwargs):
         super().__init__(
             AgiltronConsoleAdapter(host, port=port),
             name="Agiltron MEMS 1xN Optical Switch",
