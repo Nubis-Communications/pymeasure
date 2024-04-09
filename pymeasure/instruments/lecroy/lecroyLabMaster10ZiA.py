@@ -563,9 +563,10 @@ class LabMaster10ZiA(Instrument):
         """#! finish."""
         numDivisions = 10
         total_timebase = timebase / numDivisions
+        total_timebase=np.round(total_timebase,12)
         self.timebase_scale = total_timebase
 
-    def set_memory_depth(self, maxSamples, sampleRate):
+    def set_memory_depth(self, maxSamples:int, sampleRate:int):
         """#! finish."""
         timebase = maxSamples / sampleRate
         self.memory_depth = maxSamples
